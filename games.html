@@ -352,6 +352,10 @@ body:not(.playing) .scorebar {
 .presentation-note.show{transform:translate(-50%,0);opacity:1}.presentation-note span{opacity:.72}
 .presentation-ready .app{max-width:none}
 @media(max-width:700px){.presentation-note{width:calc(100% - 28px);align-items:flex-start;flex-direction:column}}
+.engine-status{display:inline-flex;margin:.45rem 0 1rem;padding:.5rem .75rem;border-radius:999px;background:rgba(54,211,153,.12);color:#8df0c3;font-size:.78rem;font-weight:800;letter-spacing:.04em}
+.menu-card{min-height:150px;touch-action:manipulation}
+.menu-card:focus-visible,.answer:focus-visible,.jcell:focus-visible{outline:4px solid #ffd55f;outline-offset:3px}
+@media(max-width:700px){.menu-card{min-height:132px}}
 </style>
 </head>
 <body>
@@ -932,40 +936,74 @@ function updateStatus(){
 
 
 let quizData=EMBEDDED_QUESTIONS;
+const GAME_REGISTRY={
+  suspicion:{title:"Scripture or Suspicion",type:"quiz",source:"suspicion",timed:false},
+  jeopardy:{title:"Bible Jeopardy",type:"jeopardy"},
+  quiz:{title:"Who Am I? Bible Challenge",type:"quiz",source:"quiz",timed:false},
+  finish:{title:"Finish the Verse",type:"quiz",source:"finish",timed:false},
+  memory:{title:"Numbered Memory Match",type:"memory"},
+  lightning:{title:"Lightning Round",type:"quiz",source:"quiz",timed:true}
+};
 function loadData(){ banks=EMBEDDED_JEOPARDY; }
 
+function launchGame(gameId){
+  const game=GAME_REGISTRY[gameId];
+  const groupData=quizData[state.group];
+  if(!game){
+    console.error("Unknown game requested:",gameId);
+    alert("That game is not available in this version.");
+    return false;
+  }
+  if(!groupData){
+    console.error("Unknown age group:",state.group);
+    alert("That age group could not load. Please return to the Game Center.");
+    return false;
+  }
+  try{
+    if(game.type==="jeopardy") startJeopardy();
+    else if(game.type==="memory") startMemory();
+    else startQuiz(gameId,game.title,groupData[game.source],game.timed);
+    history.replaceState(null,"",`games.html?group=${encodeURIComponent(state.group)}&game=${encodeURIComponent(gameId)}`);
+    return true;
+  }catch(error){
+    console.error("Game launch failed:",{gameId,group:state.group,error});
+    alert("This game could not start. Refresh the page and try again.");
+    return false;
+  }
+}
+
 function openLibrary(group){
-  state.group=group;
-  $("groupLabel").textContent=quizData[group].label;
+  const safeGroup=quizData[group]?group:"family";
+  state.group=safeGroup;
+  $("groupLabel").textContent=quizData[safeGroup].label;
   $("tournamentBadge").classList.toggle("hidden",!state.tournament?.active);
   showView("library");
+  if(!new URLSearchParams(location.search).get("game")) history.replaceState(null,"",`games.html?group=${encodeURIComponent(safeGroup)}`);
 }
 
 function autoLaunchFromUrl(){
   const params=new URLSearchParams(window.location.search);
-  const group=params.get("group");
-  const game=params.get("game");
+  const requestedGroup=params.get("group");
+  const requestedGame=params.get("game");
   const presentation=params.get("presentation");
+
+  if(requestedGroup || requestedGame || presentation==="1"){
+    $("intro").classList.add("hidden");
+    openLibrary(requestedGroup || "family");
+  }
 
   if(presentation==="1"){
     document.body.classList.add("presentation-ready");
-    $("intro").classList.add("hidden");
-    openLibrary(group && quizData[group] ? group : "family");
     const note=document.createElement("div");
     note.className="presentation-note";
     note.innerHTML="<strong>Church Presentation Mode</strong><span>Tap Fullscreen when you are ready to project.</span>";
     document.body.appendChild(note);
-    setTimeout(()=>note.classList.add("show"),100);
+    requestAnimationFrame(()=>note.classList.add("show"));
   }
 
-  if(!group || !game || !quizData[group]) return;
-  $("intro").classList.add("hidden");
-  openLibrary(group);
-
-  requestAnimationFrame(()=>{
-    const button=document.querySelector(`[data-game="${game}"]`);
-    if(button) button.click();
-  });
+  if(requestedGame){
+    requestAnimationFrame(()=>launchGame(requestedGame));
+  }
 }
 
 function setupPresentationKeys(){
@@ -997,14 +1035,9 @@ function setupEvents(){
   document.querySelectorAll("[data-score-team]").forEach(b=>b.onclick=()=>addScore(Number(b.dataset.scoreTeam),Number(b.dataset.scoreDelta)));
   $("teamName0").addEventListener("input",syncTeamButtons);$("teamName1").addEventListener("input",syncTeamButtons);
 
-  document.querySelectorAll("[data-game]").forEach(b=>b.onclick=()=>{
-    const game=b.dataset.game,groupData=quizData[state.group];
-    if(game==="jeopardy")startJeopardy();
-    else if(game==="memory")startMemory();
-    else if(game==="lightning")startQuiz("lightning","Lightning Round",groupData.quiz,true);
-    else if(game==="suspicion")startQuiz("suspicion","Scripture or Suspicion",groupData.suspicion,false);
-    else if(game==="finish")startQuiz("finish","Finish the Verse",groupData.finish,false);
-    else startQuiz("quiz","Who Am I? Bible Challenge",groupData.quiz,false);
+  document.querySelectorAll("[data-game]").forEach(button=>{
+    button.onclick=()=>launchGame(button.dataset.game);
+    button.setAttribute("aria-label",`Launch ${button.querySelector("h4")?.textContent||button.dataset.game}`);
   });
 
   $("quizRevealBtn").onclick=revealQuiz;$("quizNextBtn").onclick=nextQuiz;

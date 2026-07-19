@@ -64,7 +64,6 @@ document.querySelectorAll('[data-type]').forEach(btn=>btn.addEventListener('clic
 renderSiteSearch();
 
 const gameCards=[...document.querySelectorAll('[data-game-category]')];
-document.querySelectorAll('[data-game-filter]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-game-filter]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const filter=btn.dataset.gameFilter;gameCards.forEach(card=>card.hidden=filter!=='all'&&card.dataset.gameCategory!==filter)}));
 
 
 // Version 0.8: local study progress and collection browsing.
@@ -122,3 +121,15 @@ document.querySelectorAll('[data-game-filter]').forEach(btn=>btn.addEventListene
   if(gameEmpty)gameEmpty.hidden=shown!==0;
   document.getElementById('game-library')?.scrollIntoView({behavior:'smooth',block:'start'});
 }));
+
+
+// Version 0.8.1: reliable touch and keyboard activation.
+document.querySelectorAll('[data-game-filter],[data-collection]').forEach(control=>{
+  control.setAttribute('type','button');
+  control.addEventListener('keydown',event=>{
+    if(event.key==='Enter'||event.key===' '){
+      event.preventDefault();
+      control.click();
+    }
+  });
+});
